@@ -1,9 +1,21 @@
 import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+// On importe Playfair Display (Luxe) et Lato (Lecture)
+import { Playfair_Display, Lato } from 'next/font/google'
 
-const inter = Inter({ subsets: ['latin'] })
+const playfair = Playfair_Display({ 
+  subsets: ['latin'],
+  variable: '--font-playfair', // On crée une variable pour l'utiliser partout
+  display: 'swap',
+})
+
+const lato = Lato({ 
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-lato',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'ShoppingList Pro',
@@ -16,10 +28,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    // On enveloppe toute l'application avec ClerkProvider
     <ClerkProvider>
-      <html lang="fr">
-        <body className={inter.className}>{children}</body>
+      <html lang="fr" className={`${playfair.variable} ${lato.variable}`}>
+        <body className="font-lato bg-stone-50 text-stone-900">{children}</body>
       </html>
     </ClerkProvider>
   )

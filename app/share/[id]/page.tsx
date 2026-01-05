@@ -19,7 +19,7 @@ export default function ClientView() {
   }, [projectId]);
 
   async function fetchProjectDetails() {
-    const { data } = await supabase.from('projects').select('name, client_name').eq('id', projectId).single();
+    const { data } = await supabase.from('projects').select('name').eq('id', projectId).single();
     if (data) setProjectName(data.name);
   }
 
@@ -28,82 +28,79 @@ export default function ClientView() {
     if (data) setItems(data);
   }
 
-  // Fonction pour valider ou refuser un article
   async function updateStatus(itemId: string, newStatus: 'approved' | 'rejected') {
-    // Optimisme : on met à jour l'écran tout de suite pour que ce soit réactif
     setItems(items.map(i => i.id === itemId ? { ...i, status: newStatus } : i));
-
-    // Puis on envoie à la base de données
     await supabase.from('items').update({ status: newStatus }).eq('id', itemId);
   }
 
-  // Calcul du budget validé uniquement
   const validTotal = items
     .filter(i => i.status === 'approved')
     .reduce((acc, item) => acc + (item.price || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-        
-        {/* En-tête Client */}
-        <div className="bg-blue-600 p-8 text-white text-center">
-          <p className="text-blue-100 text-sm uppercase tracking-wider mb-2">Proposition Shopping</p>
-          <h1 className="text-3xl font-bold mb-2">{projectName}</h1>
-          <div className="bg-blue-800 inline-block px-4 py-1 rounded-full text-sm">
-            Total Validé : {validTotal} €
-          </div>
+    <div className="min-h-screen bg-[#FDFCF8] text-stone-800">
+      {/* En-tête chic et minimaliste */}
+      <header className="bg-white border-b border-stone-100 py-8 px-6 text-center sticky top-0 z-10 opacity-95">
+        <p className="text-xs font-bold tracking-[0.2em] text-stone-400 uppercase mb-2">Proposition Design</p>
+        <h1 className="text-4xl font-serif text-stone-900 mb-2">{projectName}</h1>
+        <div className="inline-block border-b-2 border-amber-400 pb-1">
+          <span className="font-bold text-stone-900">Total Validé : {validTotal} €</span>
         </div>
+      </header>
 
-        {/* Liste des articles */}
-        <div className="p-6">
-          {items.map(item => (
-            <div key={item.id} className="border-b border-gray-100 py-6 last:border-0">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800">{item.name}</h3>
-                  <p className="text-lg text-gray-600">{item.price} €</p>
-                  {item.url && <a href={item.url} target="_blank" className="text-blue-500 text-xs hover:underline mt-1 block">Voir le produit sur le site web</a>}
-                </div>
-                
-                {/* Badge de statut */}
-                <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                  item.status === 'approved' ? 'bg-green-100 text-green-700' : 
-                  item.status === 'rejected' ? 'bg-red-100 text-red-700' : 
-                  'bg-gray-100 text-gray-500'
-                }`}>
-                  {item.status === 'approved' ? 'Validé' : item.status === 'rejected' ? 'Refusé' : 'À décider'}
-                </div>
+      {/* Liste des articles style "Carte élégante" */}
+      <main className="max-w-2xl mx-auto p-6 space-y-8">
+        {items.map(item => (
+          <div key={item.id} className="bg-white p-8 rounded-none shadow-[0_20px_50px_-12px_rgba(0,0,0,0.05)] border border-stone-50 transition hover:shadow-lg">
+            
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-2xl font-serif text-stone-900 mb-1">{item.name}</h3>
+                <p className="text-xl font-light text-stone-500">{item.price} €</p>
+                {item.url && (
+                  <a href={item.url} target="_blank" className="text-xs uppercase tracking-widest text-amber-600 hover:text-amber-800 mt-3 inline-block border-b border-amber-200 pb-0.5">
+                    Voir le produit
+                  </a>
+                )}
               </div>
-
-              {/* Boutons d'action */}
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => updateStatus(item.id, 'approved')}
-                  className={`flex-1 py-3 rounded-lg font-bold transition ${
-                    item.status === 'approved' 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-white border-2 border-gray-100 text-gray-600 hover:border-green-500 hover:text-green-600'
-                  }`}
-                >
-                  ✅ Je Valide
-                </button>
-                
-                <button 
-                  onClick={() => updateStatus(item.id, 'rejected')}
-                  className={`flex-1 py-3 rounded-lg font-bold transition ${
-                    item.status === 'rejected' 
-                    ? 'bg-red-600 text-white' 
-                    : 'bg-white border-2 border-gray-100 text-gray-600 hover:border-red-500 hover:text-red-600'
-                  }`}
-                >
-                  ❌ Je Refuse
-                </button>
+              
+              {/* Badge Statut Minimaliste */}
+              <div className={`px-3 py-1 text-xs tracking-widest uppercase font-bold ${
+                item.status === 'approved' ? 'bg-stone-900 text-white' : 
+                item.status === 'rejected' ? 'bg-stone-100 text-stone-400 line-through' : 
+                'bg-amber-50 text-amber-800'
+              }`}>
+                {item.status === 'approved' ? 'Validé' : item.status === 'rejected' ? 'Refusé' : 'À décider'}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+
+            {/* Boutons d'action "Luxe" */}
+            <div className="flex gap-4 mt-6 pt-6 border-t border-stone-100">
+              <button 
+                onClick={() => updateStatus(item.id, 'approved')}
+                className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
+                  item.status === 'approved' 
+                  ? 'bg-stone-900 text-white' 
+                  : 'bg-white border border-stone-200 text-stone-400 hover:border-stone-900 hover:text-stone-900'
+                }`}
+              >
+                Valider
+              </button>
+              
+              <button 
+                onClick={() => updateStatus(item.id, 'rejected')}
+                className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
+                  item.status === 'rejected' 
+                  ? 'bg-red-50 text-red-800 border-red-100' 
+                  : 'bg-white border border-stone-200 text-stone-400 hover:border-red-200 hover:text-red-400'
+                }`}
+              >
+                Refuser
+              </button>
+            </div>
+          </div>
+        ))}
+      </main>
     </div>
   )
 }
