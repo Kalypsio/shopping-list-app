@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#2563eb',
     icons: [
       {
-        src: '/icon.png',  // <-- On pointe vers le fichier dans public
-        sizes: '512x512',  // Si ton image est carrée
+        src: '/logo-app.png', // <-- Nouveau nom pour forcer la mise à jour
+        sizes: '512x512',     // Mets 'any' si tu n'es pas sûr de la taille
         type: 'image/png',
       },
     ],
