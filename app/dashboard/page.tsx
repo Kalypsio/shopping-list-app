@@ -11,60 +11,64 @@ export default function Dashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
   const [loadingPay, setLoadingPay] = useState(false);
-  const [isPro, setIsPro] = useState(false);
+  const [isPro, setIsPro] = useState(false); // Par défaut c'est faux
+  const [checkingPro, setCheckingPro] = useState(true); // État de chargement de la verif
 
   useEffect(() => {
     if (user) {
-      // On lance le check Pro et le chargement des projets UNIQUEMENT quand l'user est chargé
-      const localPro = localStorage.getItem('shoppinglist_is_pro');
-      if (localPro === 'true') setIsPro(true);
-      
-      checkPaymentSuccess();
-      fetchProjects(user.id); // On passe l'ID pour être sûr
+      checkSubscriptionStatus(); // <-- On vérifie la VRAIE source (Stripe)
+      fetchProjects(user.id);
     }
   }, [user]);
 
-  function checkPaymentSuccess() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('success')) {
-      localStorage.setItem('shoppinglist_is_pro', 'true');
-      setIsPro(true);
-      alert("Merci ! Vous êtes maintenant Membre Pro 🎉.");
-      window.history.replaceState({}, document.title, "/dashboard");
+  // --- NOUVELLE FONCTION DE VÉRIFICATION ---
+  async function checkSubscriptionStatus() {
+    try {
+      // On demande à notre API de vérifier chez Stripe
+      const res = await fetch('/api/check-subscription');
+      const data = await res.json();
+      
+      setIsPro(data.isPro); // Stripe a dit Oui ou Non
+      
+      // Petit bonus : si Stripe dit non, on nettoie le localStorage au cas où
+      if (!data.isPro) {
+        localStorage.removeItem('shoppinglist_is_pro');
+      }
+    } catch (error) {
+      console.error("Erreur check pro", error);
+    } finally {
+      setCheckingPro(false);
     }
   }
+  // -----------------------------------------
 
-  // --- CORRECTION DE SÉCURITÉ ICI ---
   async function fetchProjects(userId: string) {
     const { data } = await supabase
       .from('projects')
       .select('*')
-      .eq('user_id', userId) // <--- C'EST CETTE LIGNE QUI SÉCURISE TOUT
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
-      
     if(data) setProjects(data);
   }
-  // ----------------------------------
 
   async function createProject() {
-    // Vérification stricte
+    // Si la vérif est encore en cours, on attend
+    if (checkingPro) return;
+
     if (projects.length >= 1 && !isPro) {
-        // Double check avec un confirm pour éviter les erreurs de clic
-        if(confirm("🔒 Limite atteinte (1 projet gratuit).\n\nPassez Pro pour en créer plus ! Aller au paiement ?")) {
-            handleSubscribe();
-        }
-        return;
+      if(confirm("🔒 Limite atteinte (1 projet gratuit).\n\nPassez Pro pour en créer plus ! Aller au paiement ?")) {
+          handleSubscribe();
+      }
+      return;
     }
 
     const newName = prompt("Nom du projet ?");
     if (!newName) return;
     
-    // On s'assure d'envoyer l'ID de l'user
-    const { data, error } = await supabase
-        .from('projects')
-        .insert([{ name: newName, user_id: user?.id }])
-        .select();
-        
+    const { data } = await supabase
+      .from('projects')
+      .insert([{ name: newName, user_id: user?.id }])
+      .select();
     if (data) router.push(`/dashboard/${data[0].id}`);
   }
 
@@ -73,7 +77,6 @@ export default function Dashboard() {
     if(!confirm("Supprimer ce projet ?")) return;
     await supabase.from('items').delete().eq('project_id', projectId);
     await supabase.from('projects').delete().eq('id', projectId);
-    // On rappelle fetchProjects avec l'ID utilisateur
     if(user?.id) fetchProjects(user.id);
   }
 
@@ -98,13 +101,20 @@ export default function Dashboard() {
         <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
           <div className="text-center md:text-left">
             <h1 className="text-4xl font-serif font-bold text-stone-900">Mes Projets</h1>
-            <p className="text-stone-500 mt-2">
-              {isPro ? "✨ Membre Pro (Illimité)" : `Plan Gratuit (${projects.length}/1 projet)`}
-            </p>
+            <div className="mt-2 text-stone-500">
+               {checkingPro ? (
+                 <span className="text-xs italic">Vérification abonnement...</span>
+               ) : isPro ? (
+                 <span className="text-amber-600 font-bold">✨ Membre Pro (Illimité)</span>
+               ) : (
+                 <span>Plan Gratuit ({projects.length}/1 projet)</span>
+               )}
+            </div>
           </div>
           
           <div className="flex items-center gap-4 bg-white p-2 rounded-full shadow-sm border border-stone-100">
-            {!isPro && (
+            {/* On cache le bouton seulement si on est SÛR d'être Pro */}
+            {!checkingPro && !isPro && (
               <button 
                 onClick={handleSubscribe}
                 disabled={loadingPay}
@@ -118,19 +128,21 @@ export default function Dashboard() {
         </div>
 
         <div className="flex justify-end mb-8">
-            {/* Logique visuelle du bouton */}
             <button 
             onClick={createProject}
+            // On désactive le bouton tant qu'on vérifie
+            disabled={checkingPro}
             className={`text-white px-6 py-3 rounded-lg font-medium shadow-lg transition ${
-              (projects.length >= 1 && !isPro)
+              (!checkingPro && projects.length >= 1 && !isPro)
               ? "bg-stone-400 cursor-not-allowed" 
               : "bg-stone-900 hover:bg-stone-800"
             }`}
             >
-            {(projects.length >= 1 && !isPro) ? "🔒 Limite atteinte" : "+ Nouveau Projet"}
+            {checkingPro ? "..." : (!isPro && projects.length >= 1) ? "🔒 Limite atteinte" : "+ Nouveau Projet"}
             </button>
         </div>
 
+        {/* Liste des projets (code inchangé ici) */}
         {projects.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-xl border border-dashed border-stone-300">
                 <p className="text-stone-400 mb-4">Aucun projet.</p>
