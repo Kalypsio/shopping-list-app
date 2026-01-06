@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       line_items: [
         {
           // Vérifie que tu as bien gardé ton ID qui commence par price_
-          price: 'price_1SmbbxEkHB5yngLmzYirCvXy', 
+          price: 'price_1Smce7EkHB5yngLmhZqqIWle', 
           quantity: 1,
         },
       ],
