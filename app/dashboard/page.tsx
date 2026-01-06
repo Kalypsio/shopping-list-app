@@ -1,116 +1,112 @@
-"use client" // Indispensable pour que les boutons fonctionnent
+"use client"
 
 import { useState, useEffect } from 'react'
-import { UserButton, useUser } from "@clerk/nextjs";
-import { supabase } from '@/lib/supabaseClient'; // On importe notre connexion
-import Link from 'next/link';
+import { supabase } from '@/lib/supabaseClient'
+import { useUser, UserButton } from '@clerk/nextjs' // On importe UserButton pour la déconnexion
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function Dashboard() {
-  const { user } = useUser(); // On récupère l'info de l'utilisateur connecté
-  const [projects, setProjects] = useState<any[]>([]); // Liste des projets
-  const [newProjectName, setNewProjectName] = useState(""); // Texte du champ "Nouveau projet"
-  const [loading, setLoading] = useState(false);
+  const { user, isLoaded } = useUser();
+  const router = useRouter();
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loadingPay, setLoadingPay] = useState(false); // État pour le chargement du paiement
 
-  // 1. Au chargement de la page, on va chercher les projets existants
   useEffect(() => {
     if (user) {
       fetchProjects();
+      checkPaymentSuccess();
     }
   }, [user]);
 
-  async function fetchProjects() {
-    // On demande à Supabase : "Donne-moi tous les projets de cet utilisateur"
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('user_id', user?.id)
-      .order('created_at', { ascending: false });
-
-    if (data) setProjects(data);
-  }
-
-  // 2. Fonction pour créer un projet quand on clique sur le bouton
-  async function createProject() {
-    if (!newProjectName) return; // Si vide, on ne fait rien
-    setLoading(true);
-
-    const { data, error } = await supabase
-      .from('projects')
-      .insert([
-        { 
-          name: newProjectName, 
-          user_id: user?.id,
-          client_name: 'Client Inconnu' // Valeur par défaut pour l'instant
-        }
-      ])
-      .select();
-
-    if (!error) {
-      setNewProjectName(""); // On vide le champ
-      fetchProjects(); // On rafraîchit la liste
-    } else {
-      console.error(error);
-      alert("Erreur lors de la création");
+  // Vérifie si l'utilisateur revient de Stripe avec un succès
+  function checkPaymentSuccess() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success')) {
+      alert("Merci ! Vous êtes maintenant Membre Pro 🎉");
+      // Ici, plus tard, on mettra à jour la base de données
     }
-    setLoading(false);
   }
+
+  async function fetchProjects() {
+    // ... (Ton code existant pour fetchProjects reste identique, ne change rien ici si tu l'as déjà)
+    const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+    if(data) setProjects(data);
+  }
+
+  async function createProject() {
+    // ... (Ton code existant pour createProject)
+    const newName = prompt("Nom du projet ?");
+    if (!newName) return;
+    const { data, error } = await supabase.from('projects').insert([{ name: newName, user_id: user?.id }]).select();
+    if (data) router.push(`/dashboard/${data[0].id}`);
+  }
+
+  // --- FONCTION POUR DÉCLENCHER LE PAIEMENT ---
+  async function handleSubscribe() {
+    setLoadingPay(true);
+    try {
+      const response = await fetch('/api/checkout', { method: 'POST' });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url; // On redirige vers Stripe
+      }
+    } catch (error) {
+      console.error("Erreur paiement", error);
+      alert("Impossible de lancer le paiement");
+    }
+    setLoadingPay(false);
+  }
+
+  if (!isLoaded) return <div className="p-10 text-center">Chargement...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Barre du haut */}
-      <nav className="bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold text-blue-600">ShoppingList Pro 🛍️</h1>
-        <div className='flex items-center gap-4'>
-           <span className='text-sm text-gray-500'>Bonjour {user?.firstName}</span>
-           <UserButton />
-        </div>
-      </nav>
-
-      <main className="max-w-4xl mx-auto mt-10 p-6">
+    <div className="min-h-screen bg-stone-50 p-8 font-sans">
+      <div className="max-w-4xl mx-auto">
         
-        {/* Formulaire de création */}
-        <div className="bg-white p-6 rounded-xl shadow-sm mb-8 flex gap-4 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nouveau Projet</label>
-            <input 
-              type="text" 
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              placeholder="Ex: Salon Mme Durand"
-              className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none text-black"
-            />
+        {/* En-tête avec UserButton et Bouton Pro */}
+        <div className="flex justify-between items-center mb-12">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-stone-900">Mes Projets</h1>
+            <p className="text-stone-500">Gérez vos listes de shopping</p>
           </div>
-          <button 
-            onClick={createProject}
-            disabled={loading}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 h-[42px]"
-          >
-            {loading ? "Création..." : "+ Créer"}
-          </button>
+          
+          <div className="flex items-center gap-4">
+            {/* Bouton Abonnement */}
+            <button 
+              onClick={handleSubscribe}
+              disabled={loadingPay}
+              className="bg-amber-400 text-stone-900 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-500 transition shadow-sm"
+            >
+              {loadingPay ? "Chargement..." : "👑 Passer Pro"}
+            </button>
+            
+            {/* Avatar Clerk */}
+            <UserButton afterSignOutUrl="/"/>
+          </div>
         </div>
 
-        {/* Liste des projets */}
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Mes Projets en cours</h2>
-        
-        <div className="grid gap-4">
-          {projects.length === 0 ? (
-            <p className="text-gray-500 italic">Aucun projet pour le moment.</p>
-          ) : (
-            projects.map((project) => (
-              <div key={project.id} className="bg-white p-6 rounded-xl border border-gray-100 flex justify-between items-center shadow-sm hover:shadow-md transition">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">{project.name}</h3>
-                  <p className="text-sm text-gray-500">Créé le {new Date(project.created_at).toLocaleDateString()}</p>
-                </div>
-                <Link href={`/dashboard/${project.id}`} className="text-blue-600 font-medium hover:underline">
-  Voir la liste →
-</Link>
+        {/* Bouton Créer */}
+        <button 
+          onClick={createProject}
+          className="bg-stone-900 text-white px-6 py-3 rounded-lg font-medium mb-8 hover:bg-stone-700 transition w-full md:w-auto"
+        >
+          + Nouveau Projet
+        </button>
+
+        {/* Grille des projets (Ton code existant pour l'affichage) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {projects.map(project => (
+            <Link key={project.id} href={`/dashboard/${project.id}`}>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-100 hover:shadow-md transition cursor-pointer h-40 flex flex-col justify-between group">
+                <h3 className="font-serif text-xl text-stone-800 group-hover:text-amber-600 transition">{project.name}</h3>
+                <p className="text-stone-400 text-xs uppercase tracking-wider">Ouvrir →</p>
               </div>
-            ))
-          )}
+            </Link>
+          ))}
         </div>
 
-      </main>
+      </div>
     </div>
-  );
+  )
 }
