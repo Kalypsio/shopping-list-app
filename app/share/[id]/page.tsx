@@ -51,53 +51,71 @@ export default function ClientView() {
       {/* Liste des articles style "Carte élégante" */}
       <main className="max-w-2xl mx-auto p-6 space-y-8">
         {items.map(item => (
-          <div key={item.id} className="bg-white p-8 rounded-none shadow-[0_20px_50px_-12px_rgba(0,0,0,0.05)] border border-stone-50 transition hover:shadow-lg">
+          <div key={item.id} className="bg-white rounded-none shadow-[0_20px_50px_-12px_rgba(0,0,0,0.05)] border border-stone-50 overflow-hidden transition hover:shadow-lg">
             
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h3 className="text-2xl font-serif text-stone-900 mb-1">{item.name}</h3>
-                <p className="text-xl font-light text-stone-500">{item.price} €</p>
-                {item.url && (
-                  <a href={item.url} target="_blank" className="text-xs uppercase tracking-widest text-amber-600 hover:text-amber-800 mt-3 inline-block border-b border-amber-200 pb-0.5">
-                    Voir le produit
-                  </a>
-                )}
+            {/* --- ZONE IMAGE (Nouveau) --- */}
+            {item.image_url && (
+              <div className="w-full h-64 bg-stone-100 relative group">
+                {/* L'image prend toute la largeur et zoom légèrement au survol */}
+                <img 
+                  src={item.image_url} 
+                  alt={item.name} 
+                  className="w-full h-full object-cover transition duration-700 group-hover:scale-105" 
+                />
               </div>
-              
-              {/* Badge Statut Minimaliste */}
-              <div className={`px-3 py-1 text-xs tracking-widest uppercase font-bold ${
-                item.status === 'approved' ? 'bg-stone-900 text-white' : 
-                item.status === 'rejected' ? 'bg-stone-100 text-stone-400 line-through' : 
-                'bg-amber-50 text-amber-800'
-              }`}>
-                {item.status === 'approved' ? 'Validé' : item.status === 'rejected' ? 'Refusé' : 'À décider'}
-              </div>
-            </div>
+            )}
+            {/* --------------------------- */}
 
-            {/* Boutons d'action "Luxe" */}
-            <div className="flex gap-4 mt-6 pt-6 border-t border-stone-100">
-              <button 
-                onClick={() => updateStatus(item.id, 'approved')}
-                className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
-                  item.status === 'approved' 
-                  ? 'bg-stone-900 text-white' 
-                  : 'bg-white border border-stone-200 text-stone-400 hover:border-stone-900 hover:text-stone-900'
-                }`}
-              >
-                Valider
-              </button>
+            {/* Conteneur du texte avec padding */}
+            <div className="p-8">
               
-              <button 
-                onClick={() => updateStatus(item.id, 'rejected')}
-                className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
-                  item.status === 'rejected' 
-                  ? 'bg-red-50 text-red-800 border-red-100' 
-                  : 'bg-white border border-stone-200 text-stone-400 hover:border-red-200 hover:text-red-400'
-                }`}
-              >
-                Refuser
-              </button>
-            </div>
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-2xl font-serif text-stone-900 mb-1">{item.name}</h3>
+                  <p className="text-xl font-light text-stone-500">{item.price} €</p>
+                  {item.url && (
+                    <a href={item.url} target="_blank" className="text-xs uppercase tracking-widest text-amber-600 hover:text-amber-800 mt-3 inline-block border-b border-amber-200 pb-0.5">
+                      Voir le produit
+                    </a>
+                  )}
+                </div>
+                
+                {/* Badge Statut Minimaliste */}
+                <div className={`px-3 py-1 text-xs tracking-widest uppercase font-bold ${
+                  item.status === 'approved' ? 'bg-stone-900 text-white' : 
+                  item.status === 'rejected' ? 'bg-stone-100 text-stone-400 line-through' : 
+                  'bg-amber-50 text-amber-800'
+                }`}>
+                  {item.status === 'approved' ? 'Validé' : item.status === 'rejected' ? 'Refusé' : 'À décider'}
+                </div>
+              </div>
+
+              {/* Boutons d'action "Luxe" */}
+              <div className="flex gap-4 mt-6 pt-6 border-t border-stone-100">
+                <button 
+                  onClick={() => updateStatus(item.id, 'approved')}
+                  className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
+                    item.status === 'approved' 
+                    ? 'bg-stone-900 text-white' 
+                    : 'bg-white border border-stone-200 text-stone-400 hover:border-stone-900 hover:text-stone-900'
+                  }`}
+                >
+                  Valider
+                </button>
+                
+                <button 
+                  onClick={() => updateStatus(item.id, 'rejected')}
+                  className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
+                    item.status === 'rejected' 
+                    ? 'bg-red-50 text-red-800 border-red-100' 
+                    : 'bg-white border border-stone-200 text-stone-400 hover:border-red-200 hover:text-red-400'
+                  }`}
+                >
+                  Refuser
+                </button>
+              </div>
+
+            </div> {/* Fin du padding wrapper */}
           </div>
         ))}
       </main>
