@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
 export default function ProjectDetails() {
-  const params = useParams(); 
+  const params = useParams();
   const projectId = params?.id as string;
 
   const [items, setItems] = useState<any[]>([]);
@@ -16,7 +16,7 @@ export default function ProjectDetails() {
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemUrl, setNewItemUrl] = useState("");
-  const [newItemImage, setNewItemImage] = useState<File | null>(null); // Le fichier image
+  const [newItemImage, setNewItemImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Pour le lien de partage
@@ -48,18 +48,17 @@ export default function ProjectDetails() {
 
     let imageUrl = null;
 
-    // 1. Upload de l'image (si présente)
     if (newItemImage) {
       const fileExt = newItemImage.name.split('.').pop();
       const fileName = `${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
-        .from('images') // Assure-toi que ton bucket s'appelle bien 'images'
+        .from('images')
         .upload(fileName, newItemImage);
 
       if (uploadError) {
         console.error("Erreur upload:", uploadError);
-        alert("Erreur lors de l'upload de l'image. Vérifie que ton bucket 'images' est bien Public.");
+        alert("Erreur upload image.");
         setLoading(false);
         return;
       }
@@ -71,7 +70,6 @@ export default function ProjectDetails() {
       imageUrl = urlData.publicUrl;
     }
 
-    // 2. Ajout dans la base de données
     const { error } = await supabase
       .from('items')
       .insert([
@@ -90,14 +88,11 @@ export default function ProjectDetails() {
       setNewItemPrice("");
       setNewItemUrl("");
       setNewItemImage(null);
-      // Reset visuel du champ fichier
       const fileInput = document.getElementById('fileInput') as HTMLInputElement;
       if(fileInput) fileInput.value = "";
-      
       fetchItems();
     } else {
-      console.error(error);
-      alert("Erreur lors de l'ajout en base de données");
+      alert("Erreur lors de l'ajout");
     }
     setLoading(false);
   }
@@ -124,18 +119,13 @@ export default function ProjectDetails() {
               <p className="text-stone-500 mt-2">Budget total : <span className="font-bold text-green-600">{total} €</span></p>
             </div>
 
-            {/* Bloc Lien Client */}
             <div className="bg-white border border-stone-200 p-4 rounded-xl flex flex-col gap-2 shadow-sm">
                <p className="text-xs font-bold text-stone-400 uppercase tracking-wide">Lien client à partager :</p>
                <div className="flex items-center gap-2">
                  <code className="bg-stone-50 px-2 py-1 rounded text-xs text-stone-600 border border-stone-200 select-all">
                     {origin}/share/{projectId}
                  </code>
-                 <a 
-                   href={`/share/${projectId}`} 
-                   target="_blank"
-                   className="bg-stone-900 text-white px-3 py-1 rounded-md text-xs font-bold hover:bg-stone-700 transition"
-                 >
+                 <a href={`/share/${projectId}`} target="_blank" className="bg-stone-900 text-white px-3 py-1 rounded-md text-xs font-bold hover:bg-stone-700 transition">
                    Ouvrir ↗
                  </a>
                </div>
@@ -143,7 +133,7 @@ export default function ProjectDetails() {
           </div>
         </div>
 
-        {/* --- FORMULAIRE D'AJOUT (C'est ici que ça change) --- */}
+        {/* Formulaire d'ajout */}
         <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-stone-200">
           <h3 className="font-serif font-bold text-stone-700 mb-4 text-xl">Ajouter un article</h3>
           
@@ -171,8 +161,6 @@ export default function ProjectDetails() {
                   value={newItemUrl}
                   onChange={e => setNewItemUrl(e.target.value)}
                 />
-                
-                {/* LE CHAMP IMAGE QUI MANQUAIT */}
                 <input 
                   id="fileInput"
                   type="file"
@@ -195,31 +183,37 @@ export default function ProjectDetails() {
         {/* Liste des articles */}
         <div className="grid gap-4">
           {items.map(item => (
-            <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm border border-stone-100 flex justify-between items-center group hover:border-stone-300 transition">
-              <div className="flex items-center gap-4 flex-1">
-                
-                {/* Petite vignette image dans la liste Admin */}
+            <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm border border-stone-100 flex flex-col md:flex-row justify-between items-center group hover:border-stone-300 transition">
+              
+              <div className="flex items-center gap-4 flex-1 w-full">
                 {item.image_url ? (
                   <img src={item.image_url} alt="vignette" className="w-16 h-16 object-cover rounded-md bg-stone-100" />
                 ) : (
                   <div className="w-16 h-16 bg-stone-100 rounded-md flex items-center justify-center text-stone-300 text-xs">No IMG</div>
                 )}
 
-                <div>
-                  <h4 className="font-bold text-lg text-stone-800 font-serif">{item.name}</h4>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-lg text-stone-800 font-serif">{item.name}</h4>
+                    {/* Badge status si rejeté */}
+                    {item.status === 'rejected' && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">REFUSÉ</span>}
+                  </div>
+                  
                   {item.url && <a href={item.url} target="_blank" className="text-amber-600 text-xs hover:underline uppercase tracking-wide">Voir le produit ↗</a>}
+
+                  {/* --- AFFICHAGE DU FEEDBACK ICI --- */}
+                  {item.feedback && (
+                    <div className="mt-2 bg-red-50 text-red-800 p-2 rounded text-sm italic border-l-2 border-red-300">
+                      💬 Client : "{item.feedback}"
+                    </div>
+                  )}
+                  {/* -------------------------------- */}
+
                 </div>
               </div>
 
-              <div className="text-right flex items-center gap-6">
+              <div className="text-right flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-end">
                 <span className="font-bold text-lg">{item.price} €</span>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                  item.status === 'approved' ? 'bg-green-100 text-green-700' : 
-                  item.status === 'rejected' ? 'bg-stone-100 text-stone-400 line-through' : 
-                  'bg-amber-50 text-amber-800'
-                }`}>
-                  {item.status === 'pending' ? 'En attente' : item.status}
-                </span>
                 <button onClick={() => deleteItem(item.id)} className="text-stone-300 hover:text-red-500 font-bold px-2 text-xl transition">×</button>
               </div>
             </div>
