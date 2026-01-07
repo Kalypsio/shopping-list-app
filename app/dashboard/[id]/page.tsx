@@ -2,223 +2,262 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { useRouter } from 'next/navigation'
+import Image from "next/image"
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
 
-export default function ProjectDetails() {
-  const params = useParams();
-  const projectId = params?.id as string;
+const BG_IMAGE_URL = "/bg-luxe.png";
 
-  const [items, setItems] = useState<any[]>([]);
-  const [projectName, setProjectName] = useState("Chargement...");
+export default function ProjectPage({ params }: { params: { id: string } }) {
+  const [project, setProject] = useState<any>(null)
+  const [items, setItems] = useState<any[]>([])
+  const [newItemName, setNewItemName] = useState('')
+  const [newItemPrice, setNewItemPrice] = useState('')
+  const [newItemUrl, setNewItemUrl] = useState('')
+  const [loading, setLoading] = useState(false)
   
-  // Formulaire d'ajout
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemPrice, setNewItemPrice] = useState("");
-  const [newItemUrl, setNewItemUrl] = useState("");
-  const [newItemImage, setNewItemImage] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Pour le lien de partage
-  const [origin, setOrigin] = useState("");
+  // États pour l'upload d'image
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setOrigin(window.location.origin);
-    }
-    if (projectId) {
-      fetchProjectDetails();
-      fetchItems();
-    }
-  }, [projectId]);
+    fetchProjectAndItems()
+  }, [])
 
-  async function fetchProjectDetails() {
-    const { data } = await supabase.from('projects').select('name').eq('id', projectId).single();
-    if (data) setProjectName(data.name);
-  }
+  async function fetchProjectAndItems() {
+    // 1. On récupère le projet
+    const { data: projectData } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', params.id)
+      .single()
+    
+    if (projectData) setProject(projectData)
 
-  async function fetchItems() {
-    const { data } = await supabase.from('items').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
-    if (data) setItems(data);
-  }
-
-  async function addItem() {
-    if (!newItemName) return;
-    setLoading(true);
-
-    let imageUrl = null;
-
-    if (newItemImage) {
-      const fileExt = newItemImage.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(fileName, newItemImage);
-
-      if (uploadError) {
-        console.error("Erreur upload:", uploadError);
-        alert("Erreur upload image.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage
-        .from('images')
-        .getPublicUrl(fileName);
-        
-      imageUrl = urlData.publicUrl;
-    }
-
-    const { error } = await supabase
+    // 2. On récupère les items
+    const { data: itemsData } = await supabase
       .from('items')
-      .insert([
-        { 
-          project_id: projectId,
-          name: newItemName,
-          price: newItemPrice ? parseFloat(newItemPrice) : 0,
-          url: newItemUrl,
-          image_url: imageUrl,
-          status: 'pending'
+      .select('*')
+      .eq('project_id', params.id)
+      .order('created_at', { ascending: true })
+    
+    if (itemsData) setItems(itemsData)
+  }
+
+  async function addItem(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newItemName || !newItemPrice) return;
+
+    setLoading(true);
+    let publicUrl = null;
+
+    // A. UPLOAD IMAGE (S'il y en a une)
+    if (imageFile) {
+        setUploading(true);
+        const fileName = `${Date.now()}-${imageFile.name}`;
+        const { error: uploadError } = await supabase.storage
+            .from('item-images')
+            .upload(fileName, imageFile);
+
+        if (uploadError) {
+            alert("Erreur upload image");
+            setUploading(false);
+            setLoading(false);
+            return;
         }
-      ]);
+
+        const { data: publicData } = supabase.storage
+            .from('item-images')
+            .getPublicUrl(fileName);
+            
+        publicUrl = publicData.publicUrl;
+    }
+
+    // B. SAUVEGARDE EN BDD
+    const { error } = await supabase.from('items').insert([{
+      project_id: params.id,
+      name: newItemName,
+      price: parseFloat(newItemPrice),
+      url: newItemUrl,
+      image_url: publicUrl // On sauvegarde l'URL de l'image
+    }])
 
     if (!error) {
-      setNewItemName("");
-      setNewItemPrice("");
-      setNewItemUrl("");
-      setNewItemImage(null);
-      const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-      if(fileInput) fileInput.value = "";
-      fetchItems();
+      setNewItemName('')
+      setNewItemPrice('')
+      setNewItemUrl('')
+      setImageFile(null)
+      fetchProjectAndItems()
     } else {
-      alert("Erreur lors de l'ajout");
+        alert("Erreur lors de l'ajout")
     }
     setLoading(false);
+    setUploading(false);
   }
 
   async function deleteItem(itemId: string) {
     if(!confirm("Supprimer cet article ?")) return;
-    await supabase.from('items').delete().eq('id', itemId);
-    fetchItems();
+    await supabase.from('items').delete().eq('id', itemId)
+    fetchProjectAndItems()
   }
 
-  const total = items.reduce((acc, item) => acc + (item.price || 0), 0);
+  // Calcul du total
+  const total = items.reduce((acc, item) => acc + item.price, 0)
+
+  if (!project) return <div className="p-10 text-center font-serif text-stone-500">Chargement du projet...</div>
 
   return (
-    <div className="min-h-screen bg-stone-50 p-6 font-sans">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen relative font-sans text-stone-900 pb-20">
+      
+      {/* --- FOND IDENTIQUE AU DASHBOARD --- */}
+      <div className="fixed inset-0 z-0">
+        <Image 
+          src={BG_IMAGE_URL}
+          alt="Fond"
+          fill
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-stone-50/80 backdrop-blur-md"></div>
+      </div>
+      
+      <div className="relative z-10 max-w-5xl mx-auto p-6 md:p-12">
         
-        {/* En-tête */}
-        <div className="mb-8">
-          <Link href="/dashboard" className="text-stone-500 hover:text-black mb-4 inline-block">← Retour aux projets</Link>
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-4xl font-serif font-bold text-stone-900">{projectName}</h1>
-              <p className="text-stone-500 mt-2">Budget total : <span className="font-bold text-green-600">{total} €</span></p>
-            </div>
+        {/* Navigation retour */}
+        <Link href="/dashboard" className="inline-flex items-center text-stone-500 hover:text-stone-900 transition mb-8 font-medium group">
+          <span className="group-hover:-translate-x-1 transition-transform mr-2">←</span> Retour à l'atelier
+        </Link>
 
-            <div className="bg-white border border-stone-200 p-4 rounded-xl flex flex-col gap-2 shadow-sm">
-               <p className="text-xs font-bold text-stone-400 uppercase tracking-wide">Lien client à partager :</p>
-               <div className="flex items-center gap-2">
-                 <code className="bg-stone-50 px-2 py-1 rounded text-xs text-stone-600 border border-stone-200 select-all">
-                    {origin}/share/{projectId}
-                 </code>
-                 <a href={`/share/${projectId}`} target="_blank" className="bg-stone-900 text-white px-3 py-1 rounded-md text-xs font-bold hover:bg-stone-700 transition">
-                   Ouvrir ↗
-                 </a>
-               </div>
+        {/* En-tête Projet */}
+        <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12">
+          <div>
+            <h1 className="text-5xl md:text-6xl font-serif font-bold text-stone-900 mb-2 drop-shadow-sm">{project.name}</h1>
+            <p className="text-xl text-stone-500 font-serif italic">Budget total : <span className="font-bold text-amber-600">{total} €</span></p>
+          </div>
+
+          {/* Lien Client (Style Glass) */}
+          <div className="bg-white/60 backdrop-blur border border-stone-200 p-4 rounded-xl shadow-sm flex flex-col gap-2 w-full md:w-auto">
+            <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Lien client à partager</span>
+            <div className="flex gap-2">
+              <input 
+                readOnly 
+                value={`https://shopping-list-app-seven-rho.vercel.app/share/${project.id}`} 
+                className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-600 w-full md:w-64 select-all"
+              />
+              <a 
+                href={`/share/${project.id}`} 
+                target="_blank"
+                className="bg-stone-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-stone-800 transition flex items-center"
+              >
+                Voir ↗
+              </a>
             </div>
           </div>
         </div>
 
-        {/* Formulaire d'ajout */}
-        <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-stone-200">
-          <h3 className="font-serif font-bold text-stone-700 mb-4 text-xl">Ajouter un article</h3>
+        {/* FORMULAIRE D'AJOUT (Style Glass Luxe) */}
+        <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-lg border border-white/50 p-8 mb-12">
+          <h2 className="font-serif text-2xl text-stone-800 mb-6 flex items-center gap-2">
+            <span className="bg-amber-100 text-amber-600 w-8 h-8 flex items-center justify-center rounded-full text-sm">＋</span>
+            Ajouter un article
+          </h2>
           
-          <div className="flex flex-col gap-4">
+          <form onSubmit={addItem} className="flex flex-col gap-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input 
-                className="border border-stone-300 p-3 rounded text-stone-900 bg-stone-50 focus:ring-2 focus:ring-stone-400 outline-none" 
-                placeholder="Nom (ex: Canapé Velours)" 
+              <input
+                type="text"
+                placeholder="Nom (ex: Canapé Velours)"
+                className="w-full bg-white border border-stone-200 rounded-xl px-5 py-4 focus:ring-2 focus:ring-amber-400 focus:outline-none transition shadow-sm"
                 value={newItemName}
                 onChange={e => setNewItemName(e.target.value)}
               />
-              <input 
-                className="border border-stone-300 p-3 rounded text-stone-900 bg-stone-50 focus:ring-2 focus:ring-stone-400 outline-none" 
-                type="number" 
-                placeholder="Prix (ex: 590)" 
+              <input
+                type="number"
+                placeholder="Prix (ex: 590)"
+                className="w-full bg-white border border-stone-200 rounded-xl px-5 py-4 focus:ring-2 focus:ring-amber-400 focus:outline-none transition shadow-sm"
                 value={newItemPrice}
                 onChange={e => setNewItemPrice(e.target.value)}
               />
             </div>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <input 
-                  className="border border-stone-300 p-3 rounded text-stone-900 bg-stone-50 focus:ring-2 focus:ring-stone-400 outline-none" 
-                  placeholder="Lien vers le site marchand (optionnel)" 
-                  value={newItemUrl}
-                  onChange={e => setNewItemUrl(e.target.value)}
+                <input
+                    type="text"
+                    placeholder="Lien vers le site marchand (optionnel)"
+                    className="w-full bg-white border border-stone-200 rounded-xl px-5 py-4 focus:ring-2 focus:ring-amber-400 focus:outline-none transition shadow-sm"
+                    value={newItemUrl}
+                    onChange={e => setNewItemUrl(e.target.value)}
                 />
-                <input 
-                  id="fileInput"
-                  type="file"
-                  accept="image/*"
-                  className="border border-stone-300 p-2 rounded text-stone-500 bg-stone-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-stone-200 file:text-stone-700 hover:file:bg-stone-300 cursor-pointer"
-                  onChange={e => e.target.files && setNewItemImage(e.target.files[0])}
-                />
+                
+                {/* Input Fichier Customisé */}
+                <div className="relative">
+                    <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="w-full bg-white border border-stone-200 rounded-xl px-5 py-4 flex items-center justify-between shadow-sm group-hover:bg-stone-50 transition">
+                        <span className={`truncate ${imageFile ? 'text-stone-900 font-medium' : 'text-stone-400'}`}>
+                            {imageFile ? `📸 ${imageFile.name}` : "Choisir une photo (optionnel)"}
+                        </span>
+                        <span className="bg-stone-100 text-stone-600 px-3 py-1 rounded-lg text-xs font-bold uppercase">Parcourir</span>
+                    </div>
+                </div>
             </div>
 
             <button 
-              onClick={addItem} 
+              type="submit" 
               disabled={loading}
-              className="bg-stone-900 text-white py-3 rounded hover:bg-stone-800 transition font-medium mt-2 w-full md:w-auto md:px-8"
+              className="mt-2 w-full bg-stone-900 text-white font-bold text-lg py-4 rounded-xl hover:bg-stone-800 hover:scale-[1.01] transition transform shadow-lg"
             >
-              {loading ? "Envoi en cours..." : "Ajouter au projet +"}
+              {loading ? "Ajout en cours..." : "Ajouter au projet +"}
             </button>
-          </div>
+          </form>
         </div>
 
-        {/* Liste des articles */}
-        <div className="grid gap-4">
+        {/* LISTE DES ITEMS */}
+        <div className="space-y-4">
           {items.map(item => (
-            <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm border border-stone-100 flex flex-col md:flex-row justify-between items-center group hover:border-stone-300 transition">
+            <div key={item.id} className="group bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-white/50 hover:shadow-md hover:bg-white/90 transition flex flex-col md:flex-row items-center gap-6">
               
-              <div className="flex items-center gap-4 flex-1 w-full">
-                {item.image_url ? (
-                  <img src={item.image_url} alt="vignette" className="w-16 h-16 object-cover rounded-md bg-stone-100" />
-                ) : (
-                  <div className="w-16 h-16 bg-stone-100 rounded-md flex items-center justify-center text-stone-300 text-xs">No IMG</div>
-                )}
-
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-lg text-stone-800 font-serif">{item.name}</h4>
-                    {/* Badge status si rejeté */}
-                    {item.status === 'rejected' && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">REFUSÉ</span>}
-                  </div>
-                  
-                  {item.url && <a href={item.url} target="_blank" className="text-amber-600 text-xs hover:underline uppercase tracking-wide">Voir le produit ↗</a>}
-
-                  {/* --- AFFICHAGE DU FEEDBACK ICI --- */}
-                  {item.feedback && (
-                    <div className="mt-2 bg-red-50 text-red-800 p-2 rounded text-sm italic border-l-2 border-red-300">
-                      💬 Client : "{item.feedback}"
-                    </div>
-                  )}
-                  {/* -------------------------------- */}
-
-                </div>
+              {/* Image miniature */}
+              <div className="w-24 h-24 shrink-0 bg-white rounded-xl overflow-hidden border border-stone-100 flex items-center justify-center relative shadow-inner">
+                 {item.image_url ? (
+                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                 ) : (
+                    <span className="text-2xl opacity-20">🛋️</span>
+                 )}
               </div>
 
-              <div className="text-right flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-end">
-                <span className="font-bold text-lg">{item.price} €</span>
-                <button onClick={() => deleteItem(item.id)} className="text-stone-300 hover:text-red-500 font-bold px-2 text-xl transition">×</button>
+              {/* Infos */}
+              <div className="flex-1 text-center md:text-left">
+                <h3 className="text-xl font-serif font-bold text-stone-800">{item.name}</h3>
+                {item.url && (
+                    <a href={item.url} target="_blank" className="text-xs text-amber-600 hover:underline flex items-center justify-center md:justify-start gap-1 mt-1">
+                        Voir le produit ↗
+                    </a>
+                )}
+              </div>
+
+              {/* Prix & Actions */}
+              <div className="flex items-center gap-6">
+                <span className="text-xl font-bold text-stone-900 bg-stone-100 px-4 py-2 rounded-lg">{item.price} €</span>
+                <button 
+                  onClick={() => deleteItem(item.id)}
+                  className="w-10 h-10 flex items-center justify-center rounded-full text-stone-300 hover:bg-red-50 hover:text-red-500 transition"
+                  title="Supprimer"
+                >
+                  ✕
+                </button>
               </div>
             </div>
           ))}
-          {items.length === 0 && <p className="text-center text-stone-400 py-10 italic">Aucun article dans cette liste.</p>}
+
+          {items.length === 0 && (
+            <div className="text-center py-12 opacity-50 font-serif italic text-stone-500">
+              Aucun article pour le moment. Commencez votre liste !
+            </div>
+          )}
         </div>
 
       </div>
