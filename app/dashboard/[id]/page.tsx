@@ -2,43 +2,55 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation' // <--- Changement ici (useParams)
 import Image from "next/image"
 import Link from 'next/link'
 
 const BG_IMAGE_URL = "/bg-luxe.png";
 
-export default function ProjectPage({ params }: { params: { id: string } }) {
+export default function ProjectPage() {
+  // 1. On récupère l'ID proprement via le Hook
+  const params = useParams();
+  const projectId = params.id as string; // On force le type en string
+
+  const router = useRouter();
   const [project, setProject] = useState<any>(null)
   const [items, setItems] = useState<any[]>([])
+  
+  // États formulaire
   const [newItemName, setNewItemName] = useState('')
   const [newItemPrice, setNewItemPrice] = useState('')
   const [newItemUrl, setNewItemUrl] = useState('')
   const [loading, setLoading] = useState(false)
-  
-  // États pour l'upload d'image
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    fetchProjectAndItems()
-  }, [])
+    // On lance le chargement seulement si on a un ID
+    if (projectId) {
+        fetchProjectAndItems()
+    }
+  }, [projectId]) // On recharge si l'ID change
 
   async function fetchProjectAndItems() {
-    // 1. On récupère le projet
-    const { data: projectData } = await supabase
+    // A. Récupération du projet
+    const { data: projectData, error: projectError } = await supabase
       .from('projects')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', projectId) // On utilise projectId ici
       .single()
     
+    if (projectError) {
+        console.error("Erreur projet:", projectError);
+        return;
+    }
     if (projectData) setProject(projectData)
 
-    // 2. On récupère les items
+    // B. Récupération des items
     const { data: itemsData } = await supabase
       .from('items')
       .select('*')
-      .eq('project_id', params.id)
+      .eq('project_id', projectId)
       .order('created_at', { ascending: true })
     
     if (itemsData) setItems(itemsData)
@@ -51,16 +63,20 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
     setLoading(true);
     let publicUrl = null;
 
-    // A. UPLOAD IMAGE (S'il y en a une)
+    // 1. UPLOAD IMAGE
     if (imageFile) {
         setUploading(true);
-        const fileName = `${Date.now()}-${imageFile.name}`;
+        // Nom unique pour éviter les conflits
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `${projectId}/${fileName}`; // On range par dossier projet
+
         const { error: uploadError } = await supabase.storage
             .from('item-images')
-            .upload(fileName, imageFile);
+            .upload(filePath, imageFile);
 
         if (uploadError) {
-            alert("Erreur upload image");
+            alert("Erreur upload image: " + uploadError.message);
             setUploading(false);
             setLoading(false);
             return;
@@ -68,18 +84,18 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
 
         const { data: publicData } = supabase.storage
             .from('item-images')
-            .getPublicUrl(fileName);
+            .getPublicUrl(filePath);
             
         publicUrl = publicData.publicUrl;
     }
 
-    // B. SAUVEGARDE EN BDD
+    // 2. INSERTION BDD
     const { error } = await supabase.from('items').insert([{
-      project_id: params.id,
+      project_id: projectId,
       name: newItemName,
       price: parseFloat(newItemPrice),
       url: newItemUrl,
-      image_url: publicUrl // On sauvegarde l'URL de l'image
+      image_url: publicUrl
     }])
 
     if (!error) {
@@ -89,7 +105,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
       setImageFile(null)
       fetchProjectAndItems()
     } else {
-        alert("Erreur lors de l'ajout")
+        alert("Erreur ajout item")
     }
     setLoading(false);
     setUploading(false);
@@ -101,15 +117,27 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
     fetchProjectAndItems()
   }
 
-  // Calcul du total
   const total = items.reduce((acc, item) => acc + item.price, 0)
 
-  if (!project) return <div className="p-10 text-center font-serif text-stone-500">Chargement du projet...</div>
+  // --- ECRAN DE CHARGEMENT AVEC FOND LUXE ---
+  if (!project) return (
+    <div className="min-h-screen relative flex items-center justify-center">
+        {/* Le fond s'affiche aussi pendant le chargement */}
+        <div className="fixed inset-0 z-0">
+            <Image src={BG_IMAGE_URL} alt="Fond" fill className="object-cover" priority />
+            <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm"></div>
+        </div>
+        <div className="relative z-10 text-white font-serif text-2xl animate-pulse">
+            Chargement de l'atelier...
+        </div>
+    </div>
+  );
+  // ------------------------------------------
 
   return (
     <div className="min-h-screen relative font-sans text-stone-900 pb-20">
       
-      {/* --- FOND IDENTIQUE AU DASHBOARD --- */}
+      {/* --- FOND --- */}
       <div className="fixed inset-0 z-0">
         <Image 
           src={BG_IMAGE_URL}
@@ -134,7 +162,6 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
             <p className="text-xl text-stone-500 font-serif italic">Budget total : <span className="font-bold text-amber-600">{total} €</span></p>
           </div>
 
-          {/* Lien Client (Style Glass) */}
           <div className="bg-white/60 backdrop-blur border border-stone-200 p-4 rounded-xl shadow-sm flex flex-col gap-2 w-full md:w-auto">
             <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Lien client à partager</span>
             <div className="flex gap-2">
@@ -154,7 +181,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* FORMULAIRE D'AJOUT (Style Glass Luxe) */}
+        {/* FORMULAIRE D'AJOUT */}
         <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-lg border border-white/50 p-8 mb-12">
           <h2 className="font-serif text-2xl text-stone-800 mb-6 flex items-center gap-2">
             <span className="bg-amber-100 text-amber-600 w-8 h-8 flex items-center justify-center rounded-full text-sm">＋</span>
@@ -188,8 +215,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                     onChange={e => setNewItemUrl(e.target.value)}
                 />
                 
-                {/* Input Fichier Customisé */}
-                <div className="relative">
+                <div className="relative group">
                     <input 
                         type="file" 
                         accept="image/*"
@@ -208,9 +234,9 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
             <button 
               type="submit" 
               disabled={loading}
-              className="mt-2 w-full bg-stone-900 text-white font-bold text-lg py-4 rounded-xl hover:bg-stone-800 hover:scale-[1.01] transition transform shadow-lg"
+              className="mt-2 w-full bg-stone-900 text-white font-bold text-lg py-4 rounded-xl hover:bg-stone-800 hover:scale-[1.01] transition transform shadow-lg flex justify-center items-center"
             >
-              {loading ? "Ajout en cours..." : "Ajouter au projet +"}
+              {loading ? (uploading ? "Envoi de la photo..." : "Ajout en cours...") : "Ajouter au projet +"}
             </button>
           </form>
         </div>
@@ -220,7 +246,6 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           {items.map(item => (
             <div key={item.id} className="group bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-white/50 hover:shadow-md hover:bg-white/90 transition flex flex-col md:flex-row items-center gap-6">
               
-              {/* Image miniature */}
               <div className="w-24 h-24 shrink-0 bg-white rounded-xl overflow-hidden border border-stone-100 flex items-center justify-center relative shadow-inner">
                  {item.image_url ? (
                     <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
@@ -229,7 +254,6 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                  )}
               </div>
 
-              {/* Infos */}
               <div className="flex-1 text-center md:text-left">
                 <h3 className="text-xl font-serif font-bold text-stone-800">{item.name}</h3>
                 {item.url && (
@@ -239,7 +263,6 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                 )}
               </div>
 
-              {/* Prix & Actions */}
               <div className="flex items-center gap-6">
                 <span className="text-xl font-bold text-stone-900 bg-stone-100 px-4 py-2 rounded-lg">{item.price} €</span>
                 <button 
@@ -254,7 +277,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           ))}
 
           {items.length === 0 && (
-            <div className="text-center py-12 opacity-50 font-serif italic text-stone-500">
+            <div className="text-center py-12 opacity-50 font-serif italic text-stone-500 bg-white/30 rounded-2xl border border-dashed border-stone-300">
               Aucun article pour le moment. Commencez votre liste !
             </div>
           )}
