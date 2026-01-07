@@ -3,167 +3,170 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useParams } from 'next/navigation'
+import Image from "next/image"
 
-export default function ClientView() {
+const BG_IMAGE_URL = "/bg-luxe.png";
+
+export default function SharePage() {
   const params = useParams();
-  const projectId = params?.id as string;
+  const projectId = params.id as string;
 
-  const [items, setItems] = useState<any[]>([]);
-  const [projectName, setProjectName] = useState("Chargement...");
+  const [project, setProject] = useState<any>(null)
+  const [items, setItems] = useState<any[]>([])
   
-  // NOUVEAU : Pour gérer quel item est en train d'être commenté
-  const [rejectingItemId, setRejectingItemId] = useState<string | null>(null);
-  const [feedbackText, setFeedbackText] = useState("");
+  // Petit état local pour simuler la validation côté client (effet visuel immédiat)
+  const [decisions, setDecisions] = useState<Record<string, 'approved' | 'rejected'>>({});
 
   useEffect(() => {
-    if (projectId) {
-      fetchProjectDetails();
-      fetchItems();
-    }
-  }, [projectId]);
+    if(projectId) fetchProjectAndItems()
+  }, [projectId])
 
-  async function fetchProjectDetails() {
-    const { data } = await supabase.from('projects').select('name').eq('id', projectId).single();
-    if (data) setProjectName(data.name);
-  }
-
-  async function fetchItems() {
-    const { data } = await supabase.from('items').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
-    if (data) setItems(data);
-  }
-
-  // Fonction mise à jour pour accepter un commentaire
-  async function updateStatus(itemId: string, newStatus: 'approved' | 'rejected', feedback: string | null = null) {
-    // Mise à jour locale (optimiste)
-    setItems(items.map(i => i.id === itemId ? { ...i, status: newStatus, feedback: feedback } : i));
+  async function fetchProjectAndItems() {
+    const { data: projectData } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .single()
     
-    // Reset du formulaire de feedback
-    setRejectingItemId(null);
-    setFeedbackText("");
+    if (projectData) setProject(projectData)
 
-    // Envoi à Supabase
-    await supabase.from('items').update({ status: newStatus, feedback: feedback }).eq('id', itemId);
+    const { data: itemsData } = await supabase
+      .from('items')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true })
+    
+    if (itemsData) setItems(itemsData)
   }
 
-  const validTotal = items
-    .filter(i => i.status === 'approved')
-    .reduce((acc, item) => acc + (item.price || 0), 0);
+  // Fonction pour gérer le clic (purement visuel pour l'instant)
+  const handleDecision = (itemId: string, decision: 'approved' | 'rejected') => {
+    setDecisions(prev => ({ ...prev, [itemId]: decision }));
+  }
+
+  // Calcul du total validé
+  const totalValidated = items.reduce((acc, item) => {
+    return decisions[item.id] === 'approved' ? acc + item.price : acc;
+  }, 0);
+
+  if (!project) return (
+    <div className="min-h-screen relative flex items-center justify-center">
+        <div className="fixed inset-0 z-0">
+            <Image src={BG_IMAGE_URL} alt="Fond" fill className="object-cover" />
+            <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm"></div>
+        </div>
+        <div className="relative z-10 text-white font-serif text-2xl animate-pulse">
+            Chargement de la proposition...
+        </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#FDFCF8] text-stone-800 font-sans">
+    <div className="min-h-screen relative font-sans text-stone-900 pb-20">
       
-      {/* En-tête */}
-      <header className="bg-white border-b border-stone-100 py-8 px-6 text-center sticky top-0 z-10 opacity-95 shadow-sm">
-        <p className="text-xs font-bold tracking-[0.2em] text-stone-400 uppercase mb-2">Proposition Design</p>
-        <h1 className="text-3xl md:text-4xl font-serif text-stone-900 mb-2">{projectName}</h1>
-        <div className="inline-block border-b-2 border-amber-400 pb-1">
-          <span className="font-bold text-stone-900">Total Validé : {validTotal} €</span>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto p-6 space-y-8">
-        {items.map(item => (
-          <div key={item.id} className="bg-white rounded-none shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] border border-stone-50 overflow-hidden transition hover:shadow-xl">
-            
-            {/* Image */}
-            {item.image_url && (
-              <div className="w-full h-64 bg-stone-100 relative group">
-                <img 
-                  src={item.image_url} 
-                  alt={item.name} 
-                  className="w-full h-full object-cover transition duration-700 group-hover:scale-105" 
-                />
-              </div>
-            )}
-
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h3 className="text-2xl font-serif text-stone-900 mb-1">{item.name}</h3>
-                  <p className="text-xl font-light text-stone-500">{item.price} €</p>
-                  {item.url && (
-                    <a href={item.url} target="_blank" className="text-xs uppercase tracking-widest text-amber-600 hover:text-amber-800 mt-3 inline-block border-b border-amber-200 pb-0.5">
-                      Voir le produit
-                    </a>
-                  )}
-                </div>
-                
-                {/* Badge Statut */}
-                <div className={`px-3 py-1 text-xs tracking-widest uppercase font-bold ${
-                  item.status === 'approved' ? 'bg-stone-900 text-white' : 
-                  item.status === 'rejected' ? 'bg-stone-100 text-stone-400 line-through' : 
-                  'bg-amber-50 text-amber-800'
-                }`}>
-                  {item.status === 'approved' ? 'Validé' : item.status === 'rejected' ? 'Refusé' : 'À décider'}
-                </div>
-              </div>
-
-              {/* LOGIQUE D'AFFICHAGE DES BOUTONS */}
-              <div className="mt-6 pt-6 border-t border-stone-100">
-                
-                {/* Cas 1 : Si l'utilisateur a cliqué sur Refuser, on affiche le champ Commentaire */}
-                {rejectingItemId === item.id ? (
-                  <div className="animate-fade-in bg-red-50 p-4 rounded-lg">
-                    <label className="text-xs font-bold text-red-800 uppercase mb-2 block">Pourquoi ce refus ? (Optionnel)</label>
-                    <textarea 
-                      className="w-full p-2 border border-red-200 rounded mb-3 text-sm focus:outline-none focus:border-red-500"
-                      placeholder="Ex: Trop cher, je n'aime pas la couleur..."
-                      rows={2}
-                      autoFocus
-                      value={feedbackText}
-                      onChange={(e) => setFeedbackText(e.target.value)}
-                    />
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => updateStatus(item.id, 'rejected', feedbackText)}
-                        className="bg-red-600 text-white px-4 py-2 text-sm font-bold uppercase rounded hover:bg-red-700 flex-1"
-                      >
-                        Confirmer le refus
-                      </button>
-                      <button 
-                        onClick={() => { setRejectingItemId(null); setFeedbackText(""); }}
-                        className="bg-white text-stone-500 border border-stone-200 px-4 py-2 text-sm font-bold uppercase rounded hover:bg-stone-50"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  // Cas 2 : Affichage normal des boutons Valider / Refuser
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={() => updateStatus(item.id, 'approved')}
-                      className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
-                        item.status === 'approved' 
-                        ? 'bg-stone-900 text-white' 
-                        : 'bg-white border border-stone-200 text-stone-400 hover:border-stone-900 hover:text-stone-900'
-                      }`}
-                    >
-                      Valider
-                    </button>
-                    
-                    <button 
-                      onClick={() => {
-                        // Au lieu de rejeter direct, on ouvre le mode "Feedback"
-                        setRejectingItemId(item.id);
-                        setFeedbackText("");
-                      }}
-                      className={`flex-1 py-4 text-sm tracking-widest uppercase transition duration-300 ${
-                        item.status === 'rejected' 
-                        ? 'bg-red-50 text-red-800 border-red-100' 
-                        : 'bg-white border border-stone-200 text-stone-400 hover:border-red-200 hover:text-red-400'
-                      }`}
-                    >
-                      Refuser
-                    </button>
-                  </div>
-                )}
-              </div>
-
+      {/* --- FOND IDENTIQUE --- */}
+      <div className="fixed inset-0 z-0">
+        <Image 
+          src={BG_IMAGE_URL}
+          alt="Fond"
+          fill
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-stone-50/80 backdrop-blur-md"></div>
+      </div>
+      
+      <div className="relative z-10 max-w-3xl mx-auto p-6 md:p-12">
+        
+        {/* En-tête Centré */}
+        <div className="text-center mb-12">
+            <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-2">Proposition Design</p>
+            <h1 className="text-5xl md:text-6xl font-serif font-bold text-stone-900 mb-4 drop-shadow-sm">{project.name}</h1>
+            <div className="inline-block bg-white/50 backdrop-blur border border-stone-200 px-6 py-2 rounded-full">
+                <span className="text-stone-500 font-serif italic mr-2">Total sélectionné :</span>
+                <span className="font-bold text-amber-600 text-xl">{totalValidated} €</span>
             </div>
-          </div>
-        ))}
-      </main>
+        </div>
+
+        {/* LISTE DES ITEMS (Cartes Clients) */}
+        <div className="space-y-6">
+          {items.map(item => {
+            const status = decisions[item.id]; // 'approved', 'rejected' ou undefined
+
+            return (
+                <div key={item.id} className={`
+                    group relative overflow-hidden rounded-3xl p-6 transition-all duration-300
+                    ${status === 'approved' ? 'bg-amber-50/90 border-amber-200 shadow-md scale-[1.02]' : ''}
+                    ${status === 'rejected' ? 'bg-stone-100/50 border-stone-200 opacity-60 grayscale' : ''}
+                    ${!status ? 'bg-white/80 backdrop-blur-md border-white/50 shadow-sm hover:shadow-lg' : ''}
+                    border
+                `}>
+                
+                {/* Badge de statut */}
+                {status === 'approved' && (
+                    <div className="absolute top-4 right-4 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                        ✅ VALIDÉ
+                    </div>
+                )}
+                {status === 'rejected' && (
+                    <div className="absolute top-4 right-4 bg-stone-400 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                        ✕ REFUSÉ
+                    </div>
+                )}
+
+                <div className="flex flex-col md:flex-row gap-6 items-center">
+                    
+                    {/* Image */}
+                    <div className="w-full md:w-40 h-40 shrink-0 bg-white rounded-2xl overflow-hidden border border-stone-100 relative shadow-inner">
+                        {item.image_url ? (
+                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">🛋️</div>
+                        )}
+                    </div>
+
+                    {/* Infos */}
+                    <div className="flex-1 text-center md:text-left w-full">
+                        <h3 className="text-2xl font-serif font-bold text-stone-800 mb-1">{item.name}</h3>
+                        <p className="text-xl font-bold text-amber-600 mb-4">{item.price} €</p>
+                        
+                        {item.url && (
+                            <a href={item.url} target="_blank" className="inline-block text-xs font-bold text-stone-400 uppercase tracking-wider hover:text-stone-900 border-b border-transparent hover:border-stone-900 transition mb-6">
+                                Voir le détail produit ↗
+                            </a>
+                        )}
+
+                        {/* Boutons d'action */}
+                        <div className="flex gap-3 justify-center md:justify-start">
+                            <button 
+                                onClick={() => handleDecision(item.id, 'approved')}
+                                className={`flex-1 md:flex-none px-6 py-3 rounded-xl font-bold text-sm transition transform hover:-translate-y-1 shadow-sm
+                                    ${status === 'approved' ? 'bg-stone-900 text-white ring-2 ring-offset-2 ring-stone-900' : 'bg-white text-stone-900 border border-stone-200 hover:bg-stone-50'}
+                                `}
+                            >
+                                {status === 'approved' ? 'Sélectionné' : 'Valider'}
+                            </button>
+                            
+                            <button 
+                                onClick={() => handleDecision(item.id, 'rejected')}
+                                className={`flex-1 md:flex-none px-6 py-3 rounded-xl font-bold text-sm transition hover:bg-stone-100 text-stone-400 hover:text-stone-600`}
+                            >
+                                Refuser
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            );
+          })}
+
+          {items.length === 0 && (
+            <div className="text-center py-20 opacity-50 font-serif italic text-stone-500">
+              Le décorateur n'a pas encore ajouté d'articles.
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   )
 }
