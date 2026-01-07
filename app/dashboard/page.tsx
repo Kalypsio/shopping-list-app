@@ -5,9 +5,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { useUser, UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import Image from "next/image"; // <--- Nouvel import
+import Image from "next/image";
 
-// On réutilise la même image pour la cohérence
 const BG_IMAGE_URL = "/bg-luxe.png";
 
 export default function Dashboard() {
@@ -94,15 +93,14 @@ export default function Dashboard() {
           fill
           className="object-cover"
         />
-        {/* Le filtre blanc à 92% d'opacité : on voit à peine l'image, c'est subtil */}
-        <div className="absolute inset-0 bg-stone-100/95 backdrop-blur-sm"></div>
+        {/* On a baissé l'opacité à 80% (bg-stone-50/80) pour voir l'image */}
+        <div className="absolute inset-0 bg-stone-50/80 backdrop-blur-md"></div>
       </div>
-      {/* ------------------------------------- */}
-
+      
       <div className="relative z-10 max-w-6xl mx-auto p-8">
         
         {/* En-tête */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6 border-b border-stone-200 pb-8">
+        <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6 border-b border-stone-900/10 pb-8">
           <div className="text-center md:text-left">
             <h1 className="text-5xl font-serif font-bold text-stone-900 drop-shadow-sm">Mon Atelier</h1>
             <div className="mt-3 text-stone-600 font-medium">
@@ -111,7 +109,7 @@ export default function Dashboard() {
                ) : isPro ? (
                  <span className="text-amber-600 bg-amber-50 px-3 py-1 rounded-full text-sm border border-amber-200">✨ Membre Pro (Illimité)</span>
                ) : (
-                 <span className="bg-stone-200 px-3 py-1 rounded-full text-sm">Plan Gratuit ({projects.length}/1 projet)</span>
+                 <span className="bg-white/50 px-3 py-1 rounded-full text-sm border border-stone-200">Plan Gratuit ({projects.length}/1 projet)</span>
                )}
             </div>
           </div>
@@ -157,10 +155,9 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {projects.map(project => (
                 <Link key={project.id} href={`/dashboard/${project.id}`}>
-                <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-100 hover:shadow-xl hover:border-amber-200 transition cursor-pointer h-56 flex flex-col justify-between group relative overflow-hidden">
+                <div className="bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-sm border border-white/50 hover:shadow-xl hover:border-amber-200 transition cursor-pointer h-56 flex flex-col justify-between group relative overflow-hidden">
                     
-                    {/* Petite barre décorative colorée sur le côté */}
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-stone-100 group-hover:bg-amber-400 transition-colors"></div>
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-stone-200 group-hover:bg-amber-400 transition-colors"></div>
 
                     <button 
                         onClick={(e) => deleteProject(project.id, e)}
@@ -174,7 +171,7 @@ export default function Dashboard() {
                         <p className="text-stone-400 text-xs mt-2 uppercase tracking-wider font-bold">Projet {new Date(project.created_at).toLocaleDateString()}</p>
                     </div>
                     
-                    <div className="flex justify-between items-end border-t border-stone-50 pt-4">
+                    <div className="flex justify-between items-end border-t border-stone-100 pt-4">
                         <span className="text-xs font-bold text-stone-400 bg-stone-50 px-2 py-1 rounded">EN COURS</span>
                         <p className="text-stone-900 text-sm font-bold flex items-center gap-2 group-hover:translate-x-1 transition">
                             Ouvrir <span className="text-amber-500 text-lg">→</span>
