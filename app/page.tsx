@@ -2,7 +2,7 @@ import { SignInButton } from "@clerk/nextjs";
 import Image from "next/image";
 
 // On utilise une belle image d'Unsplash pour le fond (libre de droits)
-const BG_IMAGE_URL = "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2053&auto=format&fit=crop";
+const BG_IMAGE_URL = "/bg-luxe.png";
 
 export default function Home() {
   return (
